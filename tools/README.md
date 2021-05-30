@@ -66,15 +66,15 @@ python mbrgenpart.py [parameters] <blob_file>
 ```
 
 Parameters are:
--  flash=<size> - flash size in MB. Acceptable are 4, 8 and 16. Default 4.
+-  flash=*size* - flash size in MB. Acceptable are 4, 8 and 16. Default 4.
 -  ota - create partition for OTA. Default no OTA.
 -  spi - create partition for spiffs.
 -  fat - create partition for fatfs.
--  spi=<size> - create partition for spiffs with given size
--  fat=<size> - create partition for fatfs woth given size
--  menu=<name> - name for position in Arduino IDE menu
--  board=<name> - board name from boards.txt
--  csv=<name> - name of csv file (without path, csv extension will be added)
+-  spi=*size* - create partition for spiffs with given size
+-  fat=*size* - create partition for fatfs woth given size
+-  menu=*name* - name for position in Arduino IDE menu
+-  board=*name* - board name from boards.txt
+-  csv=*name* - name of csv file (without path, csv extension will be added)
 
 If you provide csv name, file with this name will be created in current
 directory. Otherwise partition data will be dumped to screen.
