@@ -20,11 +20,12 @@
 #include "config.h"
 #include "esprola.h"
 #include "AudioGeneratorMbrola.h"
-
-int zero;
+#include <math.h>
+#include <ctype.h>
 
 extern "C" {
     static int grabLine(char *, int, void *);
+    static int grabLineMulti(char *, int, void *);
 };                              // semicolon for indent
 
 static int grabLine(char *buf, int size, void *userData)
@@ -40,6 +41,27 @@ static int grabLine(char *buf, int size, void *userData)
     if (*ud->pos == '\n')
         ud->pos++;
     *buf = 0;
+    return 1;
+}
+
+static int grabLineMulti(char *buf, int size, void *userData)
+{
+    struct mbrola_input_userData *ud = (struct mbrola_input_userData *)userData;
+    int i;
+    for (;;) {
+        while (*ud->pos && isspace(*ud->pos)) ud->pos++;
+        if (*ud->pos) break;
+        if (!*ud->strtable) return 0;
+        ud->pos = *ud->strtable++;
+    }
+
+    for (i = 0; *ud->pos && *ud->pos != '\n'; i++, ud->pos++) {
+        if (i < size - 1)
+            buf[i] = *ud->pos;
+    }
+    if (*ud->pos == '\n')
+        ud->pos++;
+    buf[i] = 0;
     return 1;
 }
 
@@ -69,51 +91,51 @@ void AudioGeneratorMbrola::setContrast(int n)
     contrast = (n < 0) ? 0 : (n > 100) ? 100 : n;
 }
 
-int AudioGeneratorMbrola::readAntiShock(int16_t *buffer, int count)
+int AudioGeneratorMbrola::readAntiClick(int16_t * buffer, int count)
 {
-    int samples=0;
-        
+#ifdef USE_ANTICLICK
+    int samples = 0;
+
     if (as_phase == 1) {
-        return 0;
-        while (count-- > 0 && antishock <= -10) {
-            *buffer++ = (antishock < -21800) ? (3*antishock + 32760) : 0;;
-            antishock += 10;
+        while (count-- > 0 && anticlick < -20) {
+            *buffer++ = cos(anticlick * 3.14 / (1 * 32768.0)) * 16383 - 16384;
+            anticlick += 20;
             samples++;
         }
         return samples;
     }
 
     if (as_phase == 2) {
-        while (count-- > 0 && antishock >=-32700) {
-            *buffer++ = (antishock > -10900) ? (3 * antishock) : -32700;
-            antishock -= 20;
+        while (count-- > 0 && anticlick >= -32760) {
+            *buffer++ = cos(anticlick * 3.14 / (1 * 32768.0)) * 16383 - 16384;
+            anticlick -= 3;
             samples++;
         }
         return samples;
     }
+#endif
     return 0;
 }
-    
+
 bool AudioGeneratorMbrola::loop(void)
 {
     while (running) {
         if (bufferPos >= bufferLen) {
-            int n=0;
-#ifdef USE_ANTISHOCK
-
-            if (as_phase == 1) { // attack
-                n=readAntiShock(buffer, 1024);
+            int n = 0;
+#ifdef USE_ANTICLICK
+            if (as_phase == 1) {
+                n = readAntiClick(buffer, 1024);
                 if (!n) as_phase = 0;
             }
             if (as_phase == 0) {
                 n = read_Mbrola(mbrola, buffer, 1024);
-                if (n<=0) {
+                if (n <= 0) {
                     as_phase = 2;
-                    antishock=0;
+                    anticlick = 0;
                 }
             }
             if (as_phase == 2) {
-                n=readAntiShock(buffer, 1024);
+                n = readAntiClick(buffer, 1024);
             }
 #else
             n = read_Mbrola(mbrola, buffer, 1024);
@@ -130,7 +152,7 @@ bool AudioGeneratorMbrola::loop(void)
         lastSample[AudioOutput::LEFTCHANNEL] =
             lastSample[AudioOutput::RIGHTCHANNEL] = buffer[bufferPos];
         if (!output->ConsumeSample(lastSample))
-            break;              // Can't send, but no error detected
+            break;
         bufferPos++;
     }
     output->loop();
@@ -140,7 +162,7 @@ bool AudioGeneratorMbrola::loop(void)
 bool AudioGeneratorMbrola::beginAudioOutput(AudioOutput * output)
 {
     as_phase = 1;
-    antishock = -32700;
+    anticlick = -32700;
     if (!output->SetRate(get_voicefreq_Mbrola(mbrola))) {
         printf("AudioGeneratorMbrola::begin: failed to SetRate %d in output\n",
                get_voicefreq_Mbrola(mbrola));
@@ -171,13 +193,27 @@ bool AudioGeneratorMbrola::begin(const char *text, AudioOutput * output)
 {
     if (!mbrola) {
         mbrola = init_Mbrola(grabLine, NULL);
+        if (!mbrola) return false;
         set_freq_ratio_Mbrola(mbrola, pitch);
         set_time_ratio_Mbrola(mbrola, tempo);
-        
-        
+        set_volume_ratio_Mbrola(mbrola, vol);
     }
-    udata.text = text;
     udata.pos = text;
+    set_input_userData_Mbrola(mbrola, (void *)&udata);
+    return beginAudioOutput(output);
+}
+
+bool AudioGeneratorMbrola::begin(const char **text, AudioOutput * output)
+{
+    if (!mbrola) {
+        mbrola = init_Mbrola(grabLineMulti, NULL);
+        if (!mbrola) return false;
+        set_freq_ratio_Mbrola(mbrola, pitch);
+        set_time_ratio_Mbrola(mbrola, tempo);
+        set_volume_ratio_Mbrola(mbrola, vol);
+    }
+    udata.strtable = text;
+    udata.pos = *udata.strtable++;
     set_input_userData_Mbrola(mbrola, (void *)&udata);
     return beginAudioOutput(output);
 }
@@ -201,8 +237,9 @@ bool AudioGeneratorMbrola::isRunning()
 
 void AudioGeneratorMbrola::setSpeed(float speed)
 {
-    if (speed < 0.5) speed = 0.5; else if (speed > 2.0) speed=2.0;
-    tempo = 1.0/speed;
+    if (speed < 0.5) speed = 0.5;
+    else if (speed > 2.0) speed = 2.0;
+    tempo = 1.0 / speed;
     if (mbrola) set_time_ratio_Mbrola(mbrola, tempo);
 }
 
@@ -214,7 +251,9 @@ float AudioGeneratorMbrola::getSpeed(void)
 
 void AudioGeneratorMbrola::setPitch(float _pitch)
 {
-    if (_pitch < 0.5) pitch = 0.5; else if (_pitch > 2.0) pitch=2.0; else pitch=_pitch;
+    if (_pitch < 0.5) pitch = 0.5;
+    else if (_pitch > 2.0) pitch = 2.0;
+    else pitch = _pitch;
     if (mbrola) set_freq_ratio_Mbrola(mbrola, pitch);
 }
 
@@ -224,4 +263,14 @@ float AudioGeneratorMbrola::getPitch(void)
     return pitch;
 }
 
-    
+void AudioGeneratorMbrola::setVolume(float _volume)
+{
+    vol = _volume;
+    if (mbrola) set_volume_ratio_Mbrola(mbrola, vol);
+}
+
+float AudioGeneratorMbrola::getVolume(void)
+{
+    if (mbrola) return get_volume_ratio_Mbrola(mbrola);
+    return vol;
+}

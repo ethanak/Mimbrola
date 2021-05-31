@@ -24,16 +24,17 @@
 #include "esprola.h"
 
 struct mbrola_input_userData {
-    const char *text;
     const char *pos;
+    const char **strtable;
     };
     
 class AudioGeneratorMbrola : public AudioGenerator
 {
   public:
-    AudioGeneratorMbrola() : bufferPos(0),bufferLen(0), contrast(0), mbrola(NULL),pitch(1.0),tempo(1.0) {};
+    AudioGeneratorMbrola() : bufferPos(0),bufferLen(0), contrast(0), mbrola(NULL),pitch(1.0),tempo(1.0),vol(1.0) {};
     ~AudioGeneratorMbrola();
     virtual bool begin(const char *text, AudioOutput *output);
+    bool begin(const char **text, AudioOutput * output);
     virtual bool loop() override;
     virtual bool stop() override;
     virtual bool isRunning() override;
@@ -44,6 +45,8 @@ class AudioGeneratorMbrola : public AudioGenerator
     void setSpeed(float speed);
     float getPitch();
     float getSpeed();
+    void setVolume(float volume);
+    float getVolume();
     const char *getVoice(void) {return get_voice_Mbrola();};
 
   private:
@@ -55,11 +58,12 @@ class AudioGeneratorMbrola : public AudioGenerator
   protected:
     Mbrola *mbrola;
     struct mbrola_input_userData udata;
-    int readAntiShock(int16_t *buffer, int count);
+    int readAntiClick(int16_t *buffer, int count);
     bool beginAudioOutput(AudioOutput *output);
     float pitch;
     float tempo;
-    int16_t antishock;
+    float vol;
+    int16_t anticlick;
     int8_t as_phase;
     
 };
