@@ -120,8 +120,6 @@ void applyRatio_Phone(Phone* ph, float ratio)
 
 /* phonbuff.c */
 
-#include <errno.h>
-#include <ctype.h>
 
 void initdummy_PhoneBuff(Mbrola *mb)
 {
@@ -313,7 +311,6 @@ StatePhone FillCommandBuffer(Mbrola *mb)
     float length;
     float pos, val;
     if (mb->phoneBuff.eof) return PHO_EOF;
-    errno=0;
     
     do {
         state_line = ReadLine(&mb->phoneBuff, linebuf,&line,256);
@@ -341,6 +338,7 @@ StatePhone FillCommandBuffer(Mbrola *mb)
         name=line;TOSPACE(line);
         if (*line) *line++=0;
         if (strlen(name)>3) return PHO_ERROR;
+        errno=0;
         length = strtof(line, &line); if (errno || length < 0) return PHO_ERROR;
 
         if (!strcmp(name, sil_phone)) {
@@ -361,6 +359,7 @@ StatePhone FillCommandBuffer(Mbrola *mb)
             UNSPACE(line);
             if (!*line) break;
             if (*line == '(' ) line++;
+            errno=0;
             pos=strtod(line, &line); if (errno) return PHO_ERROR;
             val=strtod(line, &line); if (errno) return PHO_ERROR;
             UNSPACE(line); if (*line == ')' ) line++;
