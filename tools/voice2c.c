@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <ctype.h>
-
+#include <sys/stat.h> // for mkdir
 
 FILE *dbfile;
 char *dbfname;
@@ -515,7 +515,7 @@ static char *helpme(char *name)
  -h : A-law compressed into .h file (only for small voice files)
  -H : downsampled, compressed into .h file (low quality)
  Without modifier: binary blob, not compressed
- -O <name>: name of data directory for output files\n"
+ -O <name>: name of data directory for output files
             Subdirectory containing output files will be created here
  )EE");
     exit(1);
@@ -583,7 +583,8 @@ int getCmdParams(int argc, char **argv)
     sprintf(buf + strlen(buf), "%s_%s", dbname, cpt[compression]);
     if (mkh) strcat(buf, "_app");
     strcat(buf,"/");
-    mkdir(buf);
+    mkdir(buf,0755);
+    printf("DATA DIR %s\n", buf);
     strcat(buf,"espola");
     outdirname = strdup(buf);    
 }
