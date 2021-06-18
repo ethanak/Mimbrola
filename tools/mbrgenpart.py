@@ -1,4 +1,3 @@
-#!/usr/bin/python
 
 import os,re
 
@@ -181,7 +180,7 @@ else:
 print ("\n=== Add these (or similar) lines to your boards.txt ===\n")
 print ("%s.menu.PartitionScheme.%s=%s" % (board, pname, name))
 print ("%s.menu.PartitionScheme.%s.build.partitions=%s" % (board, pname, pname))
-print ("%s.menu.PartitionScheme.%s.upload_maximum_size=%d" % (board, pname, aps))
+print ("%s.menu.PartitionScheme.%s.upload.maximum_size=%d" % (board, pname, aps))
 print("")
 print("=== Example upload command: ===\nesptool.py -b 921600 write_flash 0x%x '%s'" % (mbrolapos, blob))
 exit(0)
