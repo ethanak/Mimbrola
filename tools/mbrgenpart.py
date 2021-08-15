@@ -133,7 +133,7 @@ vptr += blobsize
 if fstype:
     fn = 'ffat' if fstype == 'fat' else 'spiffs'
     ft = 'fat' if fstype == 'fat' else 'spiffs'
-    partitions.append([ft, "data", ft, vptr, fssize])
+    partitions.append([fn, "data", ft, vptr, fssize])
     vptr += fssize
 
 
