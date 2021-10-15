@@ -238,7 +238,7 @@ bool AudioGeneratorMbrola::isRunning()
 void AudioGeneratorMbrola::setSpeed(float speed)
 {
     if (speed < 0.5) speed = 0.5;
-    else if (speed > 2.0) speed = 2.0;
+    else if (speed > 3.0) speed = 3.0;
     tempo = 1.0 / speed;
     if (mbrola) set_time_ratio_Mbrola(mbrola, tempo);
 }
