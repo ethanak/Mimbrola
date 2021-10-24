@@ -91,9 +91,10 @@ void AudioGeneratorMbrola::setContrast(int n)
     contrast = (n < 0) ? 0 : (n > 100) ? 100 : n;
 }
 
+
 int AudioGeneratorMbrola::readAntiClick(int16_t * buffer, int count)
 {
-#ifdef USE_ANTICLICK
+#ifndef DAC_EXTERNAL_ONLY
     int samples = 0;
 
     if (as_phase == 1) {
@@ -122,23 +123,32 @@ bool AudioGeneratorMbrola::loop(void)
     while (running) {
         if (bufferPos >= bufferLen) {
             int n = 0;
-#ifdef USE_ANTICLICK
-            if (as_phase == 1) {
-                n = readAntiClick(buffer, 1024);
-                if (!n) as_phase = 0;
-            }
-            if (as_phase == 0) {
-                n = read_Mbrola(mbrola, buffer, 1024);
-                if (n <= 0) {
-                    as_phase = 2;
-                    anticlick = 0;
-                }
-            }
-            if (as_phase == 2) {
-                n = readAntiClick(buffer, 1024);
-            }
-#else
+#ifdef DAC_EXTERNAL_ONLY
             n = read_Mbrola(mbrola, buffer, 1024);
+#else
+
+#ifndef DAC_INTERNAL_ONLY
+            if (internal_dac) {
+#endif
+                if (as_phase == 1) {
+                    n = readAntiClick(buffer, 1024);
+                    if (!n) as_phase = 0;
+                }
+                if (as_phase == 0) {
+                    n = read_Mbrola(mbrola, buffer, 1024);
+                    if (n <= 0) {
+                        as_phase = 2;
+                        anticlick = 0;
+                    }
+                }
+                if (as_phase == 2) {
+                    n = readAntiClick(buffer, 1024);
+                }
+#ifndef DAC_INTERNAL_ONLY
+            }
+            else
+#endif
+                n = read_Mbrola(mbrola, buffer, 1024);
 #endif
             if (n <= 0) {
                 stop();

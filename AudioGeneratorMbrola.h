@@ -31,7 +31,8 @@ struct mbrola_input_userData {
 class AudioGeneratorMbrola : public AudioGenerator
 {
   public:
-    AudioGeneratorMbrola() : bufferPos(0),bufferLen(0), contrast(0), mbrola(NULL),pitch(1.0),tempo(1.0),vol(1.0) {};
+    AudioGeneratorMbrola() : bufferPos(0),bufferLen(0), contrast(0), mbrola(NULL),
+                    pitch(1.0),tempo(1.0),vol(1.0),internal_dac(0) {};
     ~AudioGeneratorMbrola();
     virtual bool begin(const char *text, AudioOutput *output);
     bool begin(const char **text, AudioOutput * output);
@@ -48,6 +49,7 @@ class AudioGeneratorMbrola : public AudioGenerator
     void setVolume(float volume);
     float getVolume();
     const char *getVoice(void) {return get_voice_Mbrola();};
+    void setInternalDAC(bool internal) {internal_dac=internal;}
 
   private:
     void applyContrast(void);
@@ -65,6 +67,7 @@ class AudioGeneratorMbrola : public AudioGenerator
     float vol;
     int16_t anticlick;
     int8_t as_phase;
+    int8_t internal_dac;
     
 };
 
