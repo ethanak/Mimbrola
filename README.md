@@ -47,6 +47,9 @@ You must convert voice using `voice2c` tool (from [tools](tools) folder).
 After then, edit `config.h` file and put correct folder name
 in `_data_header(x)` definition.
 
+For Polish (full quality and compiled-in Alaw compressed) voices download prepared
+data from [mimbrola_voices_pl](https://github.com/ethanak/mimbrola_voices_pl).
+
 ## Preparing ESP32 board
 
 This library uses raw flash partition to store voice data. Before
