@@ -1,3 +1,4 @@
+#!/usr/bin/python
 
 import os,re
 
@@ -12,7 +13,7 @@ import sys
 flash = 4
 ota = False
 fstype = None
-fssize = 32768
+fssize = 0
 #blob = "/home/ethanak/Arduino/libraries/Mimbrola/data/pl1_full/espola.blob"
 blob = None
 def mkfssize(s):
@@ -32,12 +33,54 @@ def mkfssize(s):
 name = ''
 board = '<board>'
 csv = None
-        
+
+appsize=0
+appv = False
+voices={
+    "de1":[ 5728225, 11456451 ],
+    "de2":[ 5223621, 10447243 ],
+    "de3":[ 5735053, 11470107 ],
+    "en1":[ 3358140, 6716280 ],
+    "es1":[ 1415568, 2831137 ],
+    "es2":[ 2811152, 5622305 ],
+    "es3":[ 978220, 1956441 ],
+    "pl1":[ 2372775, 4745551 ],
+    "us1":[ 3619047, 7238094 ],
+    "us2":[ 3540125, 7080251 ],
+    "us3":[ 3705126, 7410252 ]}
+
+hdrsize=0
+fitin = False
+def list_voices():
+    fv=[]
+    for a in voices:
+        fv.append(a)
+    fv.sort()
+    vstr = 'Known voices: '+','.join(fv)
+    print(vstr)
+    exit(0)
+vox=None
 for arg in sys.argv[1:]:
     if arg == "ota":
         ota=True
         continue
-        
+    if arg == "int":
+        fitin = True
+        continue
+    if arg.startswith("app="):
+        appsize = mkfssize(arg[4:])
+        continue
+    if arg == 'hdr':
+        appv = True
+        continue
+    if arg.startswith("hdr="):
+        ts = voices.get(arg[4:])
+        if not ts:
+            list_voices()
+        hdrsize = ts[0]
+        appv = True
+        vox = arg[4:]
+        continue
     if arg in ("spi","fat"):
         fstype=arg
         continue
@@ -74,13 +117,17 @@ for arg in sys.argv[1:]:
     blob = arg
     break
 
-if not blob:
-    print ("Usage: %s [parameters] <filename.blob>" % sys.argv[0])
+if (blob and hdrsize):
+    print ("Usage: %s [parameters] [<filename.blob>]" % sys.argv[0])
     print ("""Parameters are:
   flash=<size> - flash size in MB. Acceptable are 4, 8 and 16. Default 4.
   ota - create partition for OTA. Default no OTA.
   spi - create partition for spiffs.
   fat - create partition for fatfs.
+  hdr - no partition for blob data (header data will be compiled in)
+  int - fit application in internal 4MB flash memory
+  hdr=<voice> - get size from known voices
+  app=<size> - size for app and ota partitions (without header data)
   spi=<size> - create partition for spiffs with given size
   fat=<size> - create partition for fatfs woth given size
   menu=<name> - name for position in Arduino IDE menu
@@ -97,38 +144,86 @@ will be printed.
 if not fstype:
     fssize = 0
 flash *= 0x100000
+frp = flash - 0x10000
 
-f=open(blob,"rb")
-f.seek(0, os.SEEK_END)
-blobsize = f.tell()
-f.close()
-blobsize = (blobsize + 0xfff) & 0xffff000
-frp = flash - (0x10000 + blobsize + fssize)
-if frp < 0:
-    print ("Does not fit in given flash size")
-    exit(1)
-aps = frp
+if not hdrsize and blob:
+    f=open(blob,"rb")
+    f.seek(0, os.SEEK_END)
+    blobsize = f.tell()
+    f.close()
+    blobsize = (blobsize + 0xfff) & 0xffff000
+    if appv:
+        hdrsize = blobsize
+        blobsize = 0
+    else:
+        frp -= blobsize
+else:
+    blobsize = 0
+    hdrsize = (hdrsize + 0xfff) & 0xffff000
+    
+maxappsize = 0x3f0000 if fitin else 0x7f0000
 
-if ota:
-    aps = frp // 2
-if aps < 512 * 1024:
-    print ("Application partition too small (0x%x bytes)" % aps)
-    exit(1)
-aps = aps & 0xffff000
-if aps > 0x3f0000:
-    aps = 0x3f0000
-frp = flash - (blobsize + 0x10000 + aps)
-if ota:
-    frp -= aps
-if fstype:
-    fssize =  frp
-partitions[-1][4] = aps
+if appsize:
+    appsize += hdrsize
+    if appsize > maxappsize:
+        print ("Application 0x%x too big, maximum is 0x%x" % (appsize, maxappsize))
+        exit(1)
+    apmem = appsize
+    if ota:
+        apmem += appsize
+    if frp < apmem + fssize:
+        mxp = frp - fssize
+        if ota:
+            mxp //= 2
+        print ("Application 0x%x does not fit in flash, maximum is 0x%x" % (appsize, mxp))
+        exit(1)
+    if fstype:
+        fssize = frp - apmem
+    
+elif fssize:
+    minappsize = 1024 * 1024
+    if hdrsize:
+        minappsize += hdrsize
+    appmem = frp - fssize
+    appsize = appmem
+    if ota:
+        appsize //= 2
+    if appsize > maxappsize:
+        appsize = maxappsize
+    if appsize < minappsize:
+        print ("Application 0x%x too small, minimum is 0x%x" % (appsize, minappsize))
+        exit(1)
+    appmem = appsize
+    if ota:
+        appmem += appsize
+    fssize = frp - appmem
+else:
+    appsize = frp
+    if fstype:
+        fssize = 128 * 1024
+        appsize -= fssize
+    if ota:
+        appsize //= 2
+    if appsize > maxappsize:
+        appsize = maxappsize
+    if appsize < 1024 * 1024 + hdrsize:
+        print ("Application 0x%x too small, minimum is 0x%x" % (appsize, 1024 * 1024 + hdrsize))
+        exit(1)
+    appmem = appsize
+    if ota:
+        appmem += appsize
+    if fstype:
+        fssize = frp - appmem
+
+partitions[-1][4] = appsize
 vptr = partitions[-1][4] + partitions[-1][3]
-mbrolapos = vptr
+
 if ota:
-    partitions.append(["app1","app","ota_1", vptr, aps])
-    vptr += aps
-partitions.append(["mbrola","data", "0x40", vptr, blobsize])
+    partitions.append(["app1","app","ota_1", vptr, appsize])
+    vptr += appsize
+if not appv:
+    mbrolapos = vptr
+    partitions.append(["mbrola","data", "0x40", vptr, blobsize])
 vptr += blobsize
 if fstype:
     fn = 'ffat' if fstype == 'fat' else 'spiffs'
@@ -136,7 +231,25 @@ if fstype:
     partitions.append([fn, "data", ft, vptr, fssize])
     vptr += fssize
 
+sysnames= {
+    'app0': 'App',
+    'app1': 'OTA'
+        }
 
+def prsize(n):
+    n = n // 1024
+    if (n & 1023):
+        return "%dk" % n
+    return "%dM" % (n // 1024)
+
+print ("=== Summary ===")
+for n,p in enumerate(partitions):
+    if n < 2:
+        continue
+    print ('%s:\t%s' % (sysnames.get(p[0], p[0]), prsize(p[4])))
+
+print("")
+    
 ps = "# Name,   Type, SubType, Offset,  Size, Flags\n"
 ps += ''.join(list("%-10s%-6s%-9s%-9s0x%x,\n" % (
         p[0]+',',
@@ -153,20 +266,17 @@ if csv:
 else:
     print(ps+"\n")
 
-def prsize(n):
-    n = n // 1024
-    if (n & 1023):
-        return "%dk" % n
-    return "%dM" % (n // 1024)
 
 if not name:
-    voicename = os.path.basename(os.path.dirname(blob))
-    name=["%dM flash" % (flash // 0x100000),"App=%s" % prsize(aps)]
+    voicename = None
+    if blob:
+         voicename = os.path.basename(os.path.dirname(blob))
+    name=["%dM flash" % (flash // 0x100000),"App=%s" % prsize(appsize)]
     if ota:
         name.append("OTA")
     if voicename:
         name.append("Mbrola %s %s" % (voicename, prsize(blobsize)))
-    else:
+    elif blob:
         name.append("Mbrola %s" % prsize(blobsize))
     if fstype:
         name.append("%s %s" % (ft.upper(),prsize(fssize)))
@@ -180,8 +290,11 @@ else:
 print ("\n=== Add these (or similar) lines to your boards.txt ===\n")
 print ("%s.menu.PartitionScheme.%s=%s" % (board, pname, name))
 print ("%s.menu.PartitionScheme.%s.build.partitions=%s" % (board, pname, pname))
-print ("%s.menu.PartitionScheme.%s.upload.maximum_size=%d" % (board, pname, aps))
+print ("%s.menu.PartitionScheme.%s.upload.maximum_size=%d" % (board, pname, appsize))
 print("")
-print("=== Example upload command: ===\nesptool.py -b 921600 write_flash 0x%x '%s'" % (mbrolapos, blob))
+if not vox:
+    print("=== Example upload command: ===\nesptool.py -b 921600 write_flash 0x%x '%s'" % (mbrolapos, blob))
+else:
+    print("=== Set in cofig.h: ===\n#define _data_header(x) __data_header(data/%s_alaw_app/espola##x)" % vox)
 exit(0)
 

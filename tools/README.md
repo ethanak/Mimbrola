@@ -62,7 +62,7 @@ for Arduino IDE and parameters for blob file upload via esptool.
 
 Usage:
 ```
-python mbrgenpart.py [parameters] <blob_file>
+python mbrgenpart.py [parameters] [<blob_file>]
 ```
 
 Parameters are:
@@ -70,6 +70,10 @@ Parameters are:
 -  ota - create partition for OTA. Default no OTA.
 -  spi - create partition for spiffs.
 -  fat - create partition for fatfs.
+-  int - fit application in lower 4 MB
+-  hdr - prepare partition for compiled-in data
+-  hdr=*voice* - use known voice as data size
+-  app=*size* - reserve *size* bytes for application
 -  spi=*size* - create partition for spiffs with given size
 -  fat=*size* - create partition for fatfs woth given size
 -  menu=*name* - name for position in Arduino IDE menu
@@ -79,7 +83,7 @@ Parameters are:
 If you provide csv name, file with this name will be created in current
 directory. Otherwise partition data will be dumped to screen.
 
-Sizes for spi and fat are in megabytes (default) or kilobytes. For example:
+Sizes for spi, app and fat are in megabytes (default) or kilobytes. For example:
 - 1M means "one megabyte"
 - 2 means "two megabytes"
 - 100k means "100 kilobytes"
