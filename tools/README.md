@@ -9,7 +9,7 @@ gcc -o voice2c voice2c.c
 
 Usage:
 ```
-./voice2c [-O <data_directory>] [-a|-A|-h|-H] <mbrola_voice>
+./voice2c [-O <data_directory>] [-a|-A|-h|-H|-u|-U] <mbrola_voice>
 ```
 
 Example:
@@ -26,9 +26,11 @@ Parameters are:
 - -A - create resampled and A-law compressed data
 - -h - create A-law compressed data and put into C array
 - -H - create resampled and compressed data and put into C array
+- -u - create µ-law compressed data
+- -U - create µ-law compressed data and put into C array
 - Without modifier: no compression.
 
-A-law compressed data uses half of voice size. You can safely use this
+A-law and µ-law compressed data uses half of voice size. You can safely use this
 type of data files as voice quality is only little degraded (especially
 if you use internal DAC and/or small speaker). Data fits in 8MB flash,
 some voices fits even in 4 MB together with application (like Polish
@@ -44,7 +46,8 @@ often.
 
 Created folders name are combined from:
 - voice name. Actually got from file name, as Mbrola database does not contain machine-readable information.
-- compression type. There are: full (for not-compressed), alaw (for compressed) and low (for resampled).
+- compression type. There are: full (for not-compressed), alaw (for A-law compressed),
+ulaw (for µ-law compressed) and low (for resampled).
 - "app" i folder contains array headers (no blob file)
 
 For example:

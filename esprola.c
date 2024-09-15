@@ -40,6 +40,8 @@
 #include <esp_partition.h>
 #endif
 
+#define USE_STATIC_MBROLA
+
 /* phone.h */
 
 //static Phone _localPhoneTable[MAXPHONES];
@@ -618,7 +620,7 @@ static uint32_t init_flash(void)
         return 0;
     }
     if (strcmp(buf,BLOB_ID)) {
-        printf("Not a MBROLA '%s' blob\n", BLOB_ID);
+        printf("Not a MBROLA '%s' blob: '%s'\n", BLOB_ID,buf);
         return 0;
     }
     return blob_start;
@@ -627,6 +629,11 @@ static uint32_t init_flash(void)
 #endif
 }
 
+
+#ifdef USE_STATIC_MBROLA
+static Mbrola _mbrola;
+#endif
+
 Mbrola* init_Mbrola(int (* grabLine)(char *, int, void *), int (output_function)(int16_t *, int ))
 {
 	Mbrola* mb;
@@ -634,8 +641,13 @@ Mbrola* init_Mbrola(int (* grabLine)(char *, int, void *), int (output_function)
     // flash init
     uint32_t faddr = init_flash();
     if (!faddr) return NULL;
-    mb= (Mbrola*) MBR_malloc(sizeof(Mbrola));
 
+#ifdef USE_STATIC_MBROLA
+    mb = &_mbrola;
+#else
+    mb= (Mbrola*) MBR_malloc(sizeof(Mbrola));
+#endif
+    if (!mb) return NULL;
     mb->flash_address = faddr;
   
 	/* Default settings ! */
@@ -670,7 +682,9 @@ void close_Mbrola(Mbrola* mb)
 /* Free the memory ! */
 {
 
+#ifndef USE_STATIC_MBROLA
 	MBR_free(mb);
+#endif
 }
 
 uint8_t reset_Mbrola(Mbrola* mb)
@@ -1491,6 +1505,54 @@ static uint8_t init_common_Database(DiphoneSynthesis *diph)
 }
 
 #if COMPRESSION_TYPE > 0
+
+#if defined ULAW_CODING
+static short ulaw_decode[256] = {
+    -32124, -31100, -30076, -29052, -28028, -27004, -25980, -24956,
+    -23932, -22908, -21884, -20860, -19836, -18812, -17788, -16764,
+    -15996, -15484, -14972, -14460, -13948, -13436, -12924, -12412,
+    -11900, -11388, -10876, -10364,  -9852,  -9340,  -8828,  -8316,
+     -7932,  -7676,  -7420,  -7164,  -6908,  -6652,  -6396,  -6140,
+     -5884,  -5628,  -5372,  -5116,  -4860,  -4604,  -4348,  -4092,
+     -3900,  -3772,  -3644,  -3516,  -3388,  -3260,  -3132,  -3004,
+     -2876,  -2748,  -2620,  -2492,  -2364,  -2236,  -2108,  -1980,
+     -1884,  -1820,  -1756,  -1692,  -1628,  -1564,  -1500,  -1436,
+     -1372,  -1308,  -1244,  -1180,  -1116,  -1052,   -988,   -924,
+      -876,   -844,   -812,   -780,   -748,   -716,   -684,   -652,
+      -620,   -588,   -556,   -524,   -492,   -460,   -428,   -396,
+      -372,   -356,   -340,   -324,   -308,   -292,   -276,   -260,
+      -244,   -228,   -212,   -196,   -180,   -164,   -148,   -132,
+      -120,   -112,   -104,    -96,    -88,    -80,    -72,    -64,
+       -56,    -48,    -40,    -32,    -24,    -16,     -8,      0,
+     32124,  31100,  30076,  29052,  28028,  27004,  25980,  24956,
+     23932,  22908,  21884,  20860,  19836,  18812,  17788,  16764,
+     15996,  15484,  14972,  14460,  13948,  13436,  12924,  12412,
+     11900,  11388,  10876,  10364,   9852,   9340,   8828,   8316,
+      7932,   7676,   7420,   7164,   6908,   6652,   6396,   6140,
+      5884,   5628,   5372,   5116,   4860,   4604,   4348,   4092,
+      3900,   3772,   3644,   3516,   3388,   3260,   3132,   3004,
+      2876,   2748,   2620,   2492,   2364,   2236,   2108,   1980,
+      1884,   1820,   1756,   1692,   1628,   1564,   1500,   1436,
+      1372,   1308,   1244,   1180,   1116,   1052,    988,    924,
+       876,    844,    812,    780,    748,    716,    684,    652,
+       620,    588,    556,    524,    492,    460,    428,    396,
+       372,    356,    340,    324,    308,    292,    276,    260,
+       244,    228,    212,    196,    180,    164,    148,    132,
+       120,    112,    104,     96,     88,     80,     72,     64,
+	56,     48,     40,     32,     24,     16,      8,      0 };
+
+
+#define MUZERO  0x02
+
+static int alaw2linear(unsigned char	a_val)
+{
+//#ifdef ZEROTRAP
+	if (a_val == MUZERO) a_val = 0;    /* optional CCITT trap */
+//#endif	
+	return ulaw_decode[a_val];
+	}
+
+#else
 #define	SIGN_BIT	(0x80)		/* Sign bit for a A-law byte. */
 #define	QUANT_MASK	(0xf)		/* Quantization field mask. */
 #define	NSEGS		(8)		/* Number of A-law segments. */
@@ -1519,6 +1581,7 @@ static int alaw2linear(unsigned char	a_val)
 	}
 	return ((a_val & SIGN_BIT) ? t : -t);
 }
+#endif
 
 static void uncompress_alaw(int16_t *buf, int n)
 {

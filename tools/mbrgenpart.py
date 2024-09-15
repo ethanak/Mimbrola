@@ -93,7 +93,7 @@ for arg in sys.argv[1:]:
     if arg.startswith("flash="):
         flash = int(arg[6:])
         if flash not in (4,8,16):
-            printf("Bad flash size: only 4, 8 or 16 are accepted")
+            print("Bad flash size: only 4, 8 or 16 are accepted")
             exit(1)
         continue
         
@@ -117,7 +117,7 @@ for arg in sys.argv[1:]:
     blob = arg
     break
 
-if (blob and hdrsize):
+if (blob and hdrsize) or (not blob and not hdrsize):
     print ("Usage: %s [parameters] [<filename.blob>]" % sys.argv[0])
     print ("""Parameters are:
   flash=<size> - flash size in MB. Acceptable are 4, 8 and 16. Default 4.
@@ -188,6 +188,7 @@ elif fssize:
     appsize = appmem
     if ota:
         appsize //= 2
+        appsize &=0xffff0000
     if appsize > maxappsize:
         appsize = maxappsize
     if appsize < minappsize:
@@ -204,6 +205,7 @@ else:
         appsize -= fssize
     if ota:
         appsize //= 2
+        appsize &=0xffff0000
     if appsize > maxappsize:
         appsize = maxappsize
     if appsize < 1024 * 1024 + hdrsize:

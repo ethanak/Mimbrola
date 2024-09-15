@@ -444,8 +444,44 @@ uint8_t alaw(int16_t pcm_val)
     
 }
 
+#define MUCLIP  32635
+#define BIAS    0x84
+#define MUZERO  0x02
+#define ZEROTRAP
+
+char exp_lut[128] = {  0,1,2,2,3,3,3,3,4,4,4,4,4,4,4,4,
+			5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,
+			6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+			6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,6,
+			7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+			7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+			7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+			7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7   };
+
+uint8_t ulaw(int16_t pcm_val)
+{
+    int sign;
+    int sample, exponent, mantissa, ulawbyte;
+ 	if (pcm_val < 0) {		/* if sample negative	*/
+	    sign = 0x80;
+	    pcm_val = - pcm_val;		/*  make abs, save sign	*/
+	    }
+	else sign = 0;
+	if (pcm_val > MUCLIP)  		/* out of range? */
+	    pcm_val = MUCLIP;       	/*   clip	 */
+	sample = pcm_val + BIAS;
+	exponent = exp_lut[( sample >> 8 ) & 0x7F];
+	mantissa = ( sample >> (exponent+3) ) & 0x0F;
+	ulawbyte = ~ (sign | (exponent << 4) | mantissa );
+#ifdef ZEROTRAP
+	if (ulawbyte == 0) ulawbyte = MUZERO;    /* optional CCITT trap */
+#endif
+    return ulawbyte;
+}
+
 uint8_t *ubuf=NULL;
 int ubuf_size=0;
+uint8_t mkulaw=0;
 void convert_a(int16_t *in, int n)
 {
     if (!ubuf) ubuf= malloc(ubuf_size = 2*n);
@@ -453,7 +489,7 @@ void convert_a(int16_t *in, int n)
         ubuf=realloc(ubuf, ubuf_size = 2*n);
     }
     int i;
-    for (i=0;i<n;i++) ubuf[i]=alaw(in[i]);
+    for (i=0;i<n;i++) ubuf[i]=mkulaw?ulaw(in[i]):alaw(in[i]);
 }
 
 int wavebyte=0;
@@ -478,7 +514,7 @@ void putWaveBytes(uint8_t *data, int nframes, int framesize, FILE *f)
 void writeBlobFrames(FILE *f, uint32_t offset, int nframes)
 {
     int i;
-    uint16_t *data=malloc(MBRPeriod * nframes * 2);
+    int16_t *data=malloc(MBRPeriod * nframes * 2);
     fseek(dbfile, RawOffset + offset, SEEK_SET);
     //printf("Reading %d at offset %d\n", MBRPeriod * 2 * nframes, RawOffset + offset);
     freadp(data, nframes, MBRPeriod * 2);
@@ -494,7 +530,8 @@ void writeBlobFrames(FILE *f, uint32_t offset, int nframes)
     }
     for (i=0; i< nframes * MBRPeriod; i+=2) {
         //half[i/2] = ((int32_t)data[i] + (int32_t)data[i+1]) / 2;
-        data[i/2] = data[i];
+        //data[i/2] = data[i];
+        data[i/2] = (data[i] + data[i+1])/2;
     }
     convert_a(data, nframes * MBRPeriod / 2);
     putWaveBytes((uint8_t *)ubuf, nframes, MBRPeriod/2, f);
@@ -514,6 +551,8 @@ static char *helpme(char *name)
  -A : binary blob, downsampled, compressed (low quality)
  -h : A-law compressed into .h file (only for small voice files)
  -H : downsampled, compressed into .h file (low quality)
+ -u : binary blob, u-law compressed
+ -U : u-law compressed into .h file (only for small voice files)
  Without modifier: binary blob, not compressed
  -O <name>: name of data directory for output files
             Subdirectory containing output files will be created here
@@ -545,6 +584,12 @@ int getCmdParams(int argc, char **argv)
                 case 'H':
                     compression = 2;
                     mkh = 1;
+                    break;
+                case 'U':
+                    mkh=1;
+                case 'u':
+                    compression = 1;
+                    mkulaw=1;
                     break;
                 case 'O':
                     if (c[2]) outdirname = c+2;
@@ -580,7 +625,7 @@ int getCmdParams(int argc, char **argv)
     else {
         buf[0]=0;
     }
-    sprintf(buf + strlen(buf), "%s_%s", dbname, cpt[compression]);
+    sprintf(buf + strlen(buf), "%s_%s", dbname, mkulaw?"ulaw":cpt[compression]);
     if (mkh) strcat(buf, "_app");
     strcat(buf,"/");
     mkdir(buf,0755);
@@ -624,8 +669,9 @@ int main(int argc, char *argv[])
     fprintf(dfout, "#ifndef FLAMBROLAD_H\n#define FLAMBROLAD_H 1\n\n");
     fprintf(fout,autogen,dbname);
     fprintf(dfout,autogen,dbname);
-    sprintf(buf,"%c%s","MaA"[compression], dbname);
+    sprintf(buf,"%c%s",(mkulaw ? 'u':"MaA"[compression]), dbname);
     fprintf(dfout,"#define BLOB_ID \"%s\"\n",buf);
+    if (mkulaw) fprintf(dfout,"#define ULAW_CODING 1\n");
     if (!mkh) fwrite(buf,4,1,wvout);
     else {
         fprintf(dfout,"#define HAVE_WAVEBLOB 1\n");
